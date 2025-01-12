@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 const setError = require("../../config/error");
 const User = require("../model/user");
+const formatResponse = require("../../helpers/formatResponse");
 
 const createUser = async (req, res, next) => {
   console.log("estoy aqui");
@@ -55,7 +56,6 @@ const createUser = async (req, res, next) => {
   }
 };
 
-
 const login = async (req, res, next) => {
   console.log("estoy en login")
   try {
@@ -105,6 +105,25 @@ if (!isPasswordValid) {
     return next(setError(500, "Internal server error."));
   }
 };
+const getAllUsers = async (req, res, next) => {
+  try {
+    const allUsers = await User.find();
+
+    if (!allUsers || allUsers.length === 0) {
+      return res.status(404).json({ status: "error", message: "No users found." });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Users retrieved successfully",
+      data: allUsers,
+    });
+  } catch (error) {
+    console.error("Error fetching users:", error.message);
+    return next(setError(500, "Error fetching users from the database"));
+  }
+};
+
 
 // const login = async(req,res,next) => {
 //   try {
@@ -144,24 +163,100 @@ const getUser = async (req, res, next) => {
         message: "User not found.",
       });
     }
+    const formatUser=formatResponse(user)
     // Respuesta exitosa
     return res.status(200).json({
       status: "success",
       message: "User retrieved successfully.",
-      data: user,
+      data: formatUser,
     });
   } catch (error) {
     console.error("The error is the following:", error);
     return next(setError(400, "Unable get user"));
   }
 };
-const updateUser = () => {
+const updateUser = async (req, res, next) => {
   try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    // Validar el formato del ID
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: "error", message: "Invalid user ID format." });
+    }
+
+    // Buscar el usuario en la base de datos
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ status: "error", message: "User not found." });
+    }
+
+    // Definir campos permitidos para actualizar
+    const allowedFields = ["name", "email", "userName", "phone", "additionalInfo", "role", "isActive", "lockerId"];
+    const filteredUpdates = {};
+
+    // Filtrar los campos permitidos del `req.body`
+    Object.keys(updates).forEach((key) => {
+      if (allowedFields.includes(key)) {
+        filteredUpdates[key] = updates[key];
+      }
+    });
+
+    // Validar duplicados para `userName` y `email`
+    if (filteredUpdates.userName || filteredUpdates.email) {
+      const duplicate = await User.findOne({
+        $or: [
+          { userName: filteredUpdates.userName },
+          { email: filteredUpdates.email },
+        ],
+        _id: { $ne: id },
+      });
+      if (duplicate) {
+        return res.status(409).json({
+          status: "error",
+          message: "UserName or Email already exists.",
+        });
+      }
+    }
+
+    // Validar que haya campos para actualizar
+    if (Object.keys(filteredUpdates).length === 0) {
+      return res.status(400).json({
+        status: "error",
+        message: "No valid fields to update.",
+      });
+    }
+
+    // Validar que el lockerId exista si se está actualizando
+    if (filteredUpdates.lockerId) {
+      const lockerExists = await Locker.findById(filteredUpdates.lockerId);
+      if (!lockerExists) {
+        return res.status(404).json({
+          status: "error",
+          message: "Locker not found.",
+        });
+      }
+    }
+
+    // Actualizar los datos del usuario
+    Object.assign(user, filteredUpdates);
+    const updatedUser = await user.save();
+
+    // Usar `formatResponse` para devolver los datos esenciales
+    const formattedUser = formatResponse(updatedUser);
+
+    // Responder con éxito
+    return res.status(200).json({
+      status: "success",
+      message: "User updated successfully.",
+      data: formattedUser,
+    });
   } catch (error) {
-    console.error("The error is the following:", error);
-    return next(setError(400, "Unable get user"));
+    console.error("Error updating user:", error.message);
+    return next(setError(500, "Failed to update user."));
   }
 };
+
 // const deleteUser = async(req,res,next) => {
 //   try {
 //     const {id}=req.body
@@ -224,4 +319,4 @@ const deleteUser = async (req, res, next) => {
 };
 
 
-module.exports = { createUser, deleteUser, getUser, login, updateUser };
+module.exports = { createUser, deleteUser, getUser, login, updateUser,getAllUsers };
