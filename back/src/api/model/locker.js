@@ -1,6 +1,8 @@
 const mongoose=require("mongoose")
 
+
 const lockerSchema= new mongoose.Schema({
+  
     location: {
         type: String,
         required: true, // Ejemplo: "Planta Baja - Aula 1"
@@ -23,6 +25,6 @@ const lockerSchema= new mongoose.Schema({
 
 },{timestamps:true, collection:"locker"})
 
-const Locker= new mongoose.model("Locker",lockerSchema)
+const Locker=  mongoose.model("Locker",lockerSchema)
 
 module.exports=Locker
