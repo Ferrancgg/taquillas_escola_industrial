@@ -5,14 +5,36 @@ const Locker = require("../model/locker")
 
 
 
+// const getAllLockers = async (req, res, next) => {
+//     try {
+//         const allLockers = await Locker.find();
+//         return res.status(200).json({ status: successfull, message: "encontrados", data: allLockers });
+//     } catch (error) {
+//         return next(setError(500, "An error occurred while fetching lockers"));
+//     }
+// };
+
+
 const getAllLockers = async (req, res, next) => {
     try {
         const allLockers = await Locker.find();
-        return res.status(200).json({ status: successfull, message: "encontrados", data: allLockers });
+        if (!allLockers || allLockers.length === 0) {
+            return res.status(404).json({
+                status: 'failed',
+                message: 'No lockers found',
+            });
+        }
+        return res.status(200).json({
+            status: 'success',
+            message: 'Lockers retrieved successfully',
+            data: allLockers,
+        });
     } catch (error) {
-        return next(setError(500, "An error occurred while fetching lockers"));
+        console.error('Error fetching lockers:', error);
+        next(setError(500, 'Error fetching lockers'));
     }
 };
+
 
 
 const getLockerById = async (req, res, next) => {
@@ -55,15 +77,37 @@ const createLocker = async (req, res, next) => {
     }
 };
 
-
-
 const deleteLocker = async (req, res, next) => {
     try {
-        // Logic goes here
+        const { id } = req.params;
+
+        // Validar si el ID está presente y tiene el formato correcto
+        if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+            return next(setError(400, "Invalid or missing locker ID"));
+        }
+
+        // Intentar encontrar y eliminar la taquilla
+        const locker = await Locker.findByIdAndDelete(id);
+
+        // Si no se encuentra la taquilla
+        if (!locker) {
+            return next(setError(404, "Locker not found"));
+        }
+
+        // Respuesta exitosa
+        return res.status(200).json({
+            status: "success",
+            message: "Locker deleted successfully",
+            data: locker,
+        });
     } catch (error) {
-        return next(setError(404, "Failed to delete the locker or locker not found"));
+        console.error("Error deleting locker:", error);
+        return next(setError(500, "An error occurred while deleting the locker"));
     }
 };
+
+
+
 
 const updateLocker = async (req, res, next) => {
     try {
